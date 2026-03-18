@@ -132,9 +132,17 @@ export default function RegistrarPage() {
 
     try {
       // Create the container record
+      // Generate folio
+      const year = new Date().getFullYear();
+      const { count } = await supabase
+        .from('containers')
+        .select('*', { count: 'exact', head: true });
+      const folio = `${year}${String((count || 0) + 1).padStart(6, '0')}`;
+
       const { data: container, error: insertError } = await supabase
-        .from('contenedores')
+        .from('containers')
         .insert({
+          folio,
           bl: form.bl,
           numero_contenedor: form.numero_contenedor,
           comercializadora: form.comercializadora,
@@ -143,7 +151,7 @@ export default function RegistrarPage() {
           tipo_mercancia_id: form.tipo_mercancia_id,
           aduana_id: form.aduana_id,
           broker_id: user.id,
-          status: 'pendiente',
+          estado: 'pendiente',
         })
         .select('id, folio')
         .single();
@@ -165,23 +173,28 @@ export default function RegistrarPage() {
           }
 
           // Save document reference
-          await supabase.from('documentos').insert({
-            contenedor_id: container.id,
-            nombre: file.name,
-            path: filePath,
-            tipo: file.type,
-            size: file.size,
+          const { data: urlData } = supabase.storage
+            .from('documentacion')
+            .getPublicUrl(filePath);
+
+          await supabase.from('documents').insert({
+            container_id: container.id,
+            nombre_archivo: file.name,
+            url: urlData.publicUrl || filePath,
+            tipo_mime: file.type,
+            tamano_bytes: file.size,
           });
         }
       }
 
       // Log event
       if (container) {
-        await supabase.from('eventos').insert({
-          contenedor_id: container.id,
-          tipo: 'creacion',
-          descripcion: 'Contenedor registrado por broker',
-          user_id: user.id,
+        await supabase.from('container_events').insert({
+          container_id: container.id,
+          tipo_evento: 'CREATED',
+          descripcion: `Contenedor registrado con Folio ${container.folio}`,
+          ejecutado_por: user.id,
+          rol_ejecutor: 'BROKER',
         });
       }
 
