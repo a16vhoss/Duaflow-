@@ -118,6 +118,12 @@ export default function EditBrokerPage() {
       }
     }
 
+    // Update aduanas assignment (aduana base goes to user_aduanas too)
+    await supabase.from('user_aduanas').delete().eq('user_id', brokerId);
+    if (aduanaBaseId) {
+      await supabase.from('user_aduanas').insert({ user_id: brokerId, aduana_id: aduanaBaseId });
+    }
+
     // Update mercancias assignments
     // Delete all existing
     await supabase.from('user_mercancias').delete().eq('user_id', brokerId);

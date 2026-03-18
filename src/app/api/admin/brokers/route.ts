@@ -65,6 +65,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Also insert into user_aduanas if aduana_base_id is set
+    if (aduana_base_id) {
+      await serviceSupabase.from('user_aduanas').insert({
+        user_id: newAuthUser.user.id,
+        aduana_id: aduana_base_id,
+      });
+    }
+
     return NextResponse.json({ user_id: newAuthUser.user.id }, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
