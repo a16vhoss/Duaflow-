@@ -173,7 +173,7 @@ export default function ContainerDetailPage() {
   async function handleDownload(doc: Document) {
     const { data } = await supabase.storage
       .from('documentacion')
-      .createSignedUrl(doc.path, 300);
+      .createSignedUrl(doc.url, 300);
     if (data?.signedUrl) {
       window.open(data.signedUrl, '_blank');
     }
@@ -182,7 +182,7 @@ export default function ContainerDetailPage() {
   async function handlePreview(doc: Document) {
     const { data } = await supabase.storage
       .from('documentacion')
-      .createSignedUrl(doc.path, 300);
+      .createSignedUrl(doc.url, 300);
     if (data?.signedUrl) {
       window.open(data.signedUrl, '_blank');
     }
@@ -200,16 +200,17 @@ export default function ContainerDetailPage() {
         comercializadora: editForm.comercializadora,
         pedimento: editForm.pedimento,
         peso: parseFloat(editForm.peso),
-        status: 'pendiente',
+        estado: 'pendiente',
       })
       .eq('id', container.id);
 
     if (!error) {
       await supabase.from('container_events').insert({
         container_id: container.id,
-        tipo: 'correccion_enviada',
+        tipo_evento: 'CORRECTION_SUBMITTED',
         descripcion: 'Corrección enviada por broker',
-        user_id: user.id,
+        ejecutado_por: user.id,
+        rol_ejecutor: 'BROKER',
       });
       setEditing(false);
       fetchAll();
@@ -293,9 +294,9 @@ export default function ContainerDetailPage() {
               Correccion solicitada
             </p>
           </div>
-          {container.notas_correccion && (
+          {container.motivo_rechazo && (
             <p className="text-xs text-slate-300 mb-3">
-              {container.notas_correccion}
+              {container.motivo_rechazo}
             </p>
           )}
           <Button
@@ -450,7 +451,7 @@ export default function ContainerDetailPage() {
               <p className="text-slate-500 text-xs">Aduana</p>
               <p className="text-slate-200">
                 {container.aduanas
-                  ? `${container.aduanas.numero} - ${container.aduanas.nombre}`
+                  ? `${container.aduanas.clave} - ${container.aduanas.nombre}`
                   : '-'}
               </p>
             </div>
@@ -508,10 +509,10 @@ export default function ContainerDetailPage() {
                     <FileText className="h-4 w-4 text-cyan-400 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-xs text-slate-200 truncate">
-                        {doc.nombre}
+                        {doc.nombre_archivo}
                       </p>
                       <p className="text-[10px] text-slate-500">
-                        {(doc.size / 1024).toFixed(0)} KB
+                        {(doc.tamano_bytes / 1024).toFixed(0)} KB
                       </p>
                     </div>
                   </div>
@@ -565,7 +566,7 @@ export default function ContainerDetailPage() {
                 {events.map((event) => (
                   <div key={event.id} className="flex gap-3 relative">
                     <div className="flex-shrink-0 w-4 h-4 mt-0.5 rounded-full bg-slate-800 flex items-center justify-center z-10">
-                      {EVENT_ICONS[event.tipo] || (
+                      {EVENT_ICONS[event.tipo_evento] || (
                         <Clock className="h-4 w-4 text-slate-400" />
                       )}
                     </div>
@@ -581,9 +582,9 @@ export default function ContainerDetailPage() {
                             { locale: es }
                           )}
                         </span>
-                        {event.users?.nombre && (
+                        {event.rol_ejecutor && (
                           <span className="text-[10px] text-slate-500">
-                            por {event.users.nombre}
+                            por {event.rol_ejecutor}
                           </span>
                         )}
                       </div>
