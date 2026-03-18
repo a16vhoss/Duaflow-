@@ -35,9 +35,9 @@ interface Container {
   comercializadora: string;
   pedimento: string;
   peso: number;
-  status: string;
+  estado: string;
   created_at: string;
-  aduanas: { nombre: string; numero: string } | null;
+  aduanas: { nombre: string; clave: string } | null;
   mercancias: { nombre: string } | null;
 }
 
@@ -73,8 +73,8 @@ export default function ContenedoresPage() {
       const { data } = await supabase
         .from('containers')
         .select(
-          `id, folio, numero_contenedor, bl, comercializadora, pedimento, peso, status, created_at,
-           aduanas(nombre, numero),
+          `id, folio, numero_contenedor, bl, comercializadora, pedimento, peso, estado, created_at,
+           aduanas(nombre, clave),
            mercancias:tipo_mercancia_id(nombre)`
         )
         .eq('broker_id', user!.id)
@@ -270,7 +270,7 @@ export default function ContenedoresPage() {
                       {c.comercializadora}
                     </TableCell>
                     <TableCell className="text-slate-300 text-xs">
-                      {c.aduanas?.numero} - {c.aduanas?.nombre}
+                      {c.aduanas?.clave} - {c.aduanas?.nombre}
                     </TableCell>
                     <TableCell className="text-slate-400 text-xs">
                       {format(new Date(c.created_at), 'dd/MM/yy', {

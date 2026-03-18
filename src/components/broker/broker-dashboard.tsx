@@ -37,7 +37,7 @@ interface ContainerRow {
   folio: string;
   numero_contenedor: string;
   bl: string;
-  status: string;
+  estado: string;
   created_at: string;
   comercializadora: string;
 }

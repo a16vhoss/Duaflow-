@@ -37,31 +37,31 @@ interface ContainerDetail {
   comercializadora: string;
   pedimento: string;
   peso: number;
-  status: string;
+  estado: string;
   created_at: string;
   updated_at: string;
   broker_id: string;
   motivo_rechazo: string | null;
-  notas_correccion: string | null;
-  aduanas: { id: string; nombre: string; numero: string } | null;
+  aduanas: { id: string; nombre: string; clave: string } | null;
   mercancias: { id: string; nombre: string } | null;
 }
 
 interface Document {
   id: string;
-  nombre: string;
-  path: string;
-  tipo: string;
-  size: number;
+  nombre_archivo: string;
+  url: string;
+  tipo_mime: string;
+  tamano_bytes: number;
   created_at: string;
 }
 
 interface Event {
   id: string;
-  tipo: string;
+  tipo_evento: string;
   descripcion: string;
   created_at: string;
-  users: { nombre: string } | null;
+  ejecutado_por: string;
+  rol_ejecutor: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -137,7 +137,7 @@ export default function ContainerDetailPage() {
       supabase
         .from('containers')
         .select(
-          `*, aduanas(id, nombre, numero), mercancias:tipo_mercancia_id(id, nombre)`
+          `*, aduanas(id, nombre, clave), mercancias:tipo_mercancia_id(id, nombre)`
         )
         .eq('id', id)
         .single(),
@@ -148,7 +148,7 @@ export default function ContainerDetailPage() {
         .order('created_at', { ascending: false }),
       supabase
         .from('container_events')
-        .select('*, users:user_id(nombre)')
+        .select('*')
         .eq('container_id', id)
         .order('created_at', { ascending: false }),
     ]);
