@@ -32,7 +32,7 @@ interface Mercancia {
 interface Aduana {
   id: string;
   nombre: string;
-  numero: string;
+  clave: string;
 }
 
 export default function RegistrarPage() {
@@ -79,7 +79,7 @@ export default function RegistrarPage() {
       // Get aduanas assigned to this broker
       const { data: userAduanas } = await supabase
         .from('user_aduanas')
-        .select('aduana_id, aduanas(id, nombre, numero)')
+        .select('aduana_id, aduanas(id, nombre, clave)')
         .eq('user_id', user!.id);
 
       if (userAduanas) {
@@ -354,7 +354,7 @@ export default function RegistrarPage() {
                       value={a.id}
                       className="text-slate-200 focus:bg-slate-700 focus:text-white"
                     >
-                      {a.numero} - {a.nombre}
+                      {a.clave} - {a.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
