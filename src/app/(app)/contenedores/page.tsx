@@ -71,7 +71,7 @@ export default function ContenedoresPage() {
 
     async function fetchContainers() {
       const { data } = await supabase
-        .from('contenedores')
+        .from('containers')
         .select(
           `id, folio, numero_contenedor, bl, comercializadora, pedimento, peso, status, created_at,
            aduanas(nombre, numero),
@@ -93,7 +93,7 @@ export default function ContenedoresPage() {
         {
           event: '*',
           schema: 'public',
-          table: 'contenedores',
+          table: 'containers',
           filter: `broker_id=eq.${user.id}`,
         },
         () => fetchContainers()
@@ -113,7 +113,7 @@ export default function ContenedoresPage() {
       c.bl?.toLowerCase().includes(search.toLowerCase()) ||
       c.comercializadora?.toLowerCase().includes(search.toLowerCase());
 
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || c.estado === statusFilter;
 
     return matchesSearch && matchesStatus;
   });
@@ -202,9 +202,9 @@ export default function ContenedoresPage() {
                     </div>
                     <Badge
                       variant="outline"
-                      className={`text-[10px] ${STATUS_COLORS[c.status] || ''}`}
+                      className={`text-[10px] ${STATUS_COLORS[c.estado] || ''}`}
                     >
-                      {STATUS_LABELS[c.status] || c.status}
+                      {STATUS_LABELS[c.estado] || c.estado}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between text-xs text-slate-400">
@@ -280,9 +280,9 @@ export default function ContenedoresPage() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] ${STATUS_COLORS[c.status] || ''}`}
+                        className={`text-[10px] ${STATUS_COLORS[c.estado] || ''}`}
                       >
-                        {STATUS_LABELS[c.status] || c.status}
+                        {STATUS_LABELS[c.estado] || c.estado}
                       </Badge>
                     </TableCell>
                     <TableCell>

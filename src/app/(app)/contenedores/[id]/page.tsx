@@ -41,7 +41,7 @@ interface ContainerDetail {
   created_at: string;
   updated_at: string;
   broker_id: string;
-  notas_rechazo: string | null;
+  motivo_rechazo: string | null;
   notas_correccion: string | null;
   aduanas: { id: string; nombre: string; numero: string } | null;
   mercancias: { id: string; nombre: string } | null;
@@ -117,12 +117,12 @@ export default function ContainerDetailPage() {
       .channel(`container-detail-${id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'contenedores', filter: `id=eq.${id}` },
+        { event: '*', schema: 'public', table: 'containers', filter: `id=eq.${id}` },
         () => fetchAll()
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'eventos', filter: `contenedor_id=eq.${id}` },
+        { event: 'INSERT', schema: 'public', table: 'container_events', filter: `container_id=eq.${id}` },
         () => fetchAll()
       )
       .subscribe();
@@ -135,21 +135,21 @@ export default function ContainerDetailPage() {
   async function fetchAll() {
     const [containerRes, docsRes, eventsRes] = await Promise.all([
       supabase
-        .from('contenedores')
+        .from('containers')
         .select(
           `*, aduanas(id, nombre, numero), mercancias:tipo_mercancia_id(id, nombre)`
         )
         .eq('id', id)
         .single(),
       supabase
-        .from('documentos')
+        .from('documents')
         .select('*')
-        .eq('contenedor_id', id)
+        .eq('container_id', id)
         .order('created_at', { ascending: false }),
       supabase
-        .from('eventos')
+        .from('container_events')
         .select('*, users:user_id(nombre)')
-        .eq('contenedor_id', id)
+        .eq('container_id', id)
         .order('created_at', { ascending: false }),
     ]);
 
@@ -193,7 +193,7 @@ export default function ContainerDetailPage() {
     setSaving(true);
 
     const { error } = await supabase
-      .from('contenedores')
+      .from('containers')
       .update({
         bl: editForm.bl,
         numero_contenedor: editForm.numero_contenedor,
@@ -205,8 +205,8 @@ export default function ContainerDetailPage() {
       .eq('id', container.id);
 
     if (!error) {
-      await supabase.from('eventos').insert({
-        contenedor_id: container.id,
+      await supabase.from('container_events').insert({
+        container_id: container.id,
         tipo: 'correccion_enviada',
         descripcion: 'Corrección enviada por broker',
         user_id: user.id,
@@ -241,8 +241,8 @@ export default function ContainerDetailPage() {
     );
   }
 
-  const isApproved = container.status === 'aprobado';
-  const needsCorrection = container.status === 'correccion_solicitada';
+  const isApproved = container.estado === 'aprobado';
+  const needsCorrection = container.estado === 'correccion_solicitada';
 
   return (
     <div className="space-y-4">
@@ -261,9 +261,9 @@ export default function ContainerDetailPage() {
             <h1 className="text-lg font-bold text-white">{container.folio}</h1>
             <Badge
               variant="outline"
-              className={STATUS_COLORS[container.status] || ''}
+              className={STATUS_COLORS[container.estado] || ''}
             >
-              {STATUS_LABELS[container.status] || container.status}
+              {STATUS_LABELS[container.estado] || container.estado}
             </Badge>
           </div>
           <p className="text-xs text-slate-400">
@@ -310,13 +310,13 @@ export default function ContainerDetailPage() {
       )}
 
       {/* Rejection notes */}
-      {container.status === 'rechazado' && container.notas_rechazo && (
+      {container.estado === 'rechazado' && container.motivo_rechazo && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
           <div className="flex items-center gap-2 mb-1">
             <XCircle className="h-4 w-4 text-red-400" />
             <p className="text-sm font-medium text-red-400">Motivo de rechazo</p>
           </div>
-          <p className="text-xs text-slate-300">{container.notas_rechazo}</p>
+          <p className="text-xs text-slate-300">{container.motivo_rechazo}</p>
         </div>
       )}
 

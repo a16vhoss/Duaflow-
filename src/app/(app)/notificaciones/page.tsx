@@ -26,7 +26,7 @@ interface Notification {
   mensaje: string;
   leida: boolean;
   enviada: boolean;
-  contenedor_id: string | null;
+  container_id: string | null;
   created_at: string;
 }
 
@@ -141,8 +141,8 @@ export default function NotificacionesPage() {
 
   function handleNotifClick(notif: Notification) {
     if (!notif.leida) markAsRead(notif.id);
-    if (notif.contenedor_id) {
-      router.push(`/contenedores/${notif.contenedor_id}`);
+    if (notif.container_id) {
+      router.push(`/contenedores/${notif.container_id}`);
     }
   }
 

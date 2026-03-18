@@ -86,16 +86,16 @@ export default function BrokerDashboard() {
     async function fetchDashboard() {
       // Fetch all containers for this broker
       const { data: containers } = await supabase
-        .from('contenedores')
-        .select('id, folio, numero_contenedor, bl, status, created_at, comercializadora')
+        .from('containers')
+        .select('id, folio, numero_contenedor, bl, estado, created_at, comercializadora')
         .eq('broker_id', user!.id)
         .order('created_at', { ascending: false });
 
       if (containers) {
         const total = containers.length;
-        const pendientes = containers.filter((c) => c.status === 'pendiente').length;
-        const aprobados = containers.filter((c) => c.status === 'aprobado').length;
-        const rechazados = containers.filter((c) => c.status === 'rechazado').length;
+        const pendientes = containers.filter((c) => c.estado === 'pendiente').length;
+        const aprobados = containers.filter((c) => c.estado === 'aprobado').length;
+        const rechazados = containers.filter((c) => c.estado === 'rechazado').length;
 
         setStats({ total, pendientes, aprobados, rechazados });
         setRecentContainers(containers.slice(0, 10));
@@ -114,7 +114,7 @@ export default function BrokerDashboard() {
         {
           event: '*',
           schema: 'public',
-          table: 'contenedores',
+          table: 'containers',
           filter: `broker_id=eq.${user.id}`,
         },
         () => fetchDashboard()
@@ -320,9 +320,9 @@ export default function BrokerDashboard() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${STATUS_COLORS[container.status] || ''}`}
+                          className={`text-[10px] ${STATUS_COLORS[container.estado] || ''}`}
                         >
-                          {STATUS_LABELS[container.status] || container.status}
+                          {STATUS_LABELS[container.estado] || container.estado}
                         </Badge>
                       </TableCell>
                     </TableRow>
