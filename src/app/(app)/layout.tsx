@@ -1,7 +1,7 @@
-'use client';
+import { RoleLayoutWrapper } from '@/components/role-layout';
 
-import { RoleLayout } from '@/components/role-layout';
+export const dynamic = 'force-dynamic';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <RoleLayout>{children}</RoleLayout>;
+  return <RoleLayoutWrapper>{children}</RoleLayoutWrapper>;
 }
