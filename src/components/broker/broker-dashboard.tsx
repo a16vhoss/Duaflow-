@@ -252,8 +252,7 @@ export default function BrokerDashboard() {
                       paddingAngle={3}
                       dataKey="value"
                       strokeWidth={0}
-                      isAnimationActive={true}
-                      animationDuration={600}
+                      isAnimationActive={false}
                     >
                       {donutData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index]} />

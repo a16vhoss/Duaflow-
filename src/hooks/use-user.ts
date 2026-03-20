@@ -17,15 +17,21 @@ export function useUser() {
         return;
       }
 
-      // Fetch profile and permissions in parallel
-      const [{ data: profile }, { data: permisos }] = await Promise.all([
-        supabase.from('users').select('*').eq('id', authUser.id).single(),
-        supabase.from('admin_permisos').select('*').eq('user_id', authUser.id).single(),
-      ]);
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
 
       if (profile) {
-        if ((profile.role === 'admin' || profile.role === 'superadmin') && permisos) {
-          profile.admin_permisos = permisos;
+        // Only fetch permissions for admin/superadmin roles
+        if (profile.role === 'admin' || profile.role === 'superadmin') {
+          const { data: permisos } = await supabase
+            .from('admin_permisos')
+            .select('*')
+            .eq('user_id', profile.id)
+            .single();
+          if (permisos) profile.admin_permisos = permisos;
         }
         setUser(profile as UserWithPermisos);
       }
