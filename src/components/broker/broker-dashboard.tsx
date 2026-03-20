@@ -170,8 +170,7 @@ export default function BrokerDashboard() {
       }
 
       setLoading(false);
-      // Allow chart to render smoothly after data is ready
-      requestAnimationFrame(() => setChartReady(true));
+      setChartReady(true);
     }
 
     fetchDashboard();

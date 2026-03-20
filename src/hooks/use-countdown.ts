@@ -14,32 +14,30 @@ export function useCountdown() {
       const diaSemana = now.getDay();
       const horaActual = now.toTimeString().slice(0, 8);
 
-      // Get today's remaining schedules
-      const { data: todaySchedules } = await supabase
+      // Fetch ALL active schedules in a single query
+      const { data: allSchedules } = await supabase
         .from('corte_schedules')
-        .select('hora_corte')
-        .eq('dia_semana', diaSemana)
+        .select('dia_semana, hora_corte')
         .eq('activo', true)
-        .gt('hora_corte', horaActual)
-        .order('hora_corte', { ascending: true })
-        .limit(1);
+        .order('dia_semana', { ascending: true })
+        .order('hora_corte', { ascending: true });
 
-      if (todaySchedules && todaySchedules.length > 0) {
-        setNextCorte(todaySchedules[0].hora_corte);
+      if (!allSchedules || allSchedules.length === 0) return;
+
+      // Find today's remaining schedules
+      const todayRemaining = allSchedules.filter(
+        (s) => s.dia_semana === diaSemana && s.hora_corte > horaActual
+      );
+
+      if (todayRemaining.length > 0) {
+        setNextCorte(todayRemaining[0].hora_corte);
       } else {
-        // Get next day's first schedule
+        // Find next day's first schedule
         for (let i = 1; i <= 7; i++) {
           const nextDay = (diaSemana + i) % 7;
-          const { data: nextSchedules } = await supabase
-            .from('corte_schedules')
-            .select('hora_corte')
-            .eq('dia_semana', nextDay)
-            .eq('activo', true)
-            .order('hora_corte', { ascending: true })
-            .limit(1);
-
-          if (nextSchedules && nextSchedules.length > 0) {
-            setNextCorte(`+${i}d ${nextSchedules[0].hora_corte}`);
+          const nextDaySchedules = allSchedules.filter((s) => s.dia_semana === nextDay);
+          if (nextDaySchedules.length > 0) {
+            setNextCorte(`+${i}d ${nextDaySchedules[0].hora_corte}`);
             break;
           }
         }
