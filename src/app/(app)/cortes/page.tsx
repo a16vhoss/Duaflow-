@@ -26,6 +26,8 @@ import {
   Calendar,
   AlertCircle,
   CheckCircle,
+  Filter,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -51,6 +53,10 @@ export default function CortesPage() {
   // Confirm manual corte
   const [showManualDialog, setShowManualDialog] = useState(false);
 
+  // Filtros de fecha para cortes recientes
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+
   async function loadData() {
     setLoading(true);
     const [schedRes, cortesRes] = await Promise.all([
@@ -69,6 +75,21 @@ export default function CortesPage() {
   async function handleManualCorte() {
     if (!user) return;
     setExecutingCorte(true);
+
+    // Prevent duplicate cortes — check if one was created in the last minute
+    const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
+    const { data: recentDuplicates } = await supabase
+      .from('cortes')
+      .select('id')
+      .gte('created_at', oneMinuteAgo)
+      .eq('tipo', 'manual');
+
+    if (recentDuplicates && recentDuplicates.length > 0) {
+      alert('Ya se ejecuto un corte hace menos de un minuto. Espera antes de ejecutar otro.');
+      setExecutingCorte(false);
+      setShowManualDialog(false);
+      return;
+    }
 
     // Count containers by status in pendiente state
     const { data: pendientes } = await supabase
@@ -124,6 +145,17 @@ export default function CortesPage() {
 
   async function addSchedule() {
     setAddingSched(true);
+
+    // Prevent duplicate schedule with same day and time
+    const duplicate = schedules.find(
+      (s) => s.dia_semana === newDia && s.hora_corte.substring(0, 5) === newHora.substring(0, 5)
+    );
+    if (duplicate) {
+      alert(`Ya existe un corte programado para ${DIAS_SEMANA[newDia]} a las ${newHora}.`);
+      setAddingSched(false);
+      return;
+    }
+
     const maxOrden = schedules
       .filter((s) => s.dia_semana === newDia)
       .reduce((max, s) => Math.max(max, s.orden), 0);
@@ -152,6 +184,28 @@ export default function CortesPage() {
     if (!confirm('Eliminar este horario de corte?')) return;
     await supabase.from('corte_schedules').delete().eq('id', id);
     loadData();
+  }
+
+  // Filtrar cortes por rango de fechas
+  const filteredCortes = recentCortes.filter((c) => {
+    if (!fechaDesde && !fechaHasta) return true;
+    const corteDate = new Date(c.created_at);
+    if (fechaDesde) {
+      const desde = new Date(fechaDesde);
+      desde.setHours(0, 0, 0, 0);
+      if (corteDate < desde) return false;
+    }
+    if (fechaHasta) {
+      const hasta = new Date(fechaHasta);
+      hasta.setHours(23, 59, 59, 999);
+      if (corteDate > hasta) return false;
+    }
+    return true;
+  });
+
+  function clearDateFilters() {
+    setFechaDesde('');
+    setFechaHasta('');
   }
 
   // Group schedules by day
@@ -330,11 +384,55 @@ export default function CortesPage() {
               <CardTitle className="text-sm text-slate-900">Actividad Reciente</CardTitle>
             </CardHeader>
             <CardContent>
-              {recentCortes.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">Sin cortes recientes.</p>
+              {/* Filtros de periodo */}
+              <div className="space-y-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                  <Filter className="h-3.5 w-3.5 text-rose-500" />
+                  Filtrar por periodo
+                </p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Desde</label>
+                    <input
+                      type="date"
+                      value={fechaDesde}
+                      onChange={(e) => setFechaDesde(e.target.value)}
+                      className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Hasta</label>
+                    <input
+                      type="date"
+                      value={fechaHasta}
+                      onChange={(e) => setFechaHasta(e.target.value)}
+                      className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs text-slate-700 focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                </div>
+                {(fechaDesde || fechaHasta) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500">
+                      {filteredCortes.length} resultado{filteredCortes.length !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={clearDateFilters}
+                      className="flex items-center gap-1 text-[10px] text-rose-500 hover:text-rose-600 font-medium"
+                    >
+                      <XCircle className="h-3 w-3" />
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {filteredCortes.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">
+                  {fechaDesde || fechaHasta ? 'Sin cortes en el periodo seleccionado.' : 'Sin cortes recientes.'}
+                </p>
               ) : (
                 <div className="space-y-3">
-                  {recentCortes.map((c) => (
+                  {filteredCortes.map((c) => (
                     <div key={c.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge

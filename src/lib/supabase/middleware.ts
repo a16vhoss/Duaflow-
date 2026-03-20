@@ -32,7 +32,12 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes
-  if (pathname.startsWith('/_next') || pathname.startsWith('/api/auth') || pathname === '/favicon.ico') {
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/auth') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/forgot-password'
+  ) {
     return supabaseResponse;
   }
 
@@ -44,6 +49,33 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     return supabaseResponse;
+  }
+
+  // ---------- Session uniqueness check (Hallazgo 2.1.4) ----------
+  // Validate that this session is the active one for the user.
+  // We read the session token from the cookie and compare with the DB.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentSessionId = sessionData?.session?.access_token;
+
+  if (currentSessionId && pathname !== '/login') {
+    try {
+      const { data: storedSession } = await supabase
+        .from('user_sessions')
+        .select('session_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (storedSession && storedSession.session_id !== currentSessionId) {
+        // This session has been superseded by a newer login
+        await supabase.auth.signOut();
+        const url = request.nextUrl.clone();
+        url.pathname = '/login';
+        url.searchParams.set('error', 'Tu sesion fue cerrada porque se inicio sesion desde otro dispositivo.');
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // If check fails, allow request to continue
+    }
   }
 
   // Get user profile with role

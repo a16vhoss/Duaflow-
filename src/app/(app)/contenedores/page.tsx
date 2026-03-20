@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/use-user';
 import { Card, CardContent } from '@/components/ui/card';
@@ -59,6 +60,7 @@ const ALL_STATUSES = ['pendiente', 'aprobado', 'rechazado', 'correccion_solicita
 
 export default function ContenedoresPage() {
   const { user, loading: userLoading } = useUser();
+  const router = useRouter();
   const supabase = createClient();
 
   const [containers, setContainers] = useState<Container[]>([]);
@@ -160,7 +162,12 @@ export default function ContenedoresPage() {
         <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || 'all')}>
           <SelectTrigger className="w-36 bg-slate-800 border-slate-700 text-white focus:ring-cyan-500/20">
             <Filter className="h-3 w-3 mr-1 text-slate-400" />
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Status">
+              {(value: string | null) => {
+                if (!value || value === 'all') return 'Todos';
+                return STATUS_LABELS[value] || value;
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent className="bg-slate-800 border-slate-700">
             <SelectItem
@@ -253,9 +260,7 @@ export default function ContenedoresPage() {
                   <TableRow
                     key={c.id}
                     className="border-slate-700 hover:bg-slate-700/50 cursor-pointer"
-                    onClick={() =>
-                      (window.location.href = `/contenedores/${c.id}`)
-                    }
+                    onClick={() => router.push(`/contenedores/${c.id}`)}
                   >
                     <TableCell className="text-cyan-400 text-xs font-mono font-semibold">
                       {c.folio}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/use-user';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +34,7 @@ import {
   Download,
   FileText,
   Calendar,
+  Loader2,
 } from 'lucide-react';
 import {
   startOfMonth,
@@ -73,6 +74,8 @@ export default function ReportesPage() {
   const [byMercancia, setByMercancia] = useState<{ name: string; value: number }[]>([]);
   const [byWeek, setByWeek] = useState<{ week: string; aprobados: number; rechazados: number; pendientes: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const reportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadAduanas() {
@@ -195,9 +198,27 @@ export default function ReportesPage() {
     URL.revokeObjectURL(url);
   }
 
-  function exportPDF() {
-    // Simple print-based PDF export
-    window.print();
+  async function exportPDF() {
+    if (!reportRef.current) return;
+    setGeneratingPDF(true);
+    try {
+      // Dynamic import of html2pdf.js to keep bundle size small
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = reportRef.current;
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `reporte-${periodo}-${format(new Date(), 'yyyy-MM-dd')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' as const },
+      };
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert('Error al generar el PDF. Intenta de nuevo.');
+    } finally {
+      setGeneratingPDF(false);
+    }
   }
 
   if (userLoading) {
@@ -209,7 +230,7 @@ export default function ReportesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" ref={reportRef}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -221,9 +242,13 @@ export default function ReportesPage() {
             <Download className="h-4 w-4 mr-2" />
             CSV
           </Button>
-          <Button variant="outline" onClick={exportPDF}>
-            <FileText className="h-4 w-4 mr-2" />
-            PDF
+          <Button variant="outline" onClick={exportPDF} disabled={generatingPDF}>
+            {generatingPDF ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4 mr-2" />
+            )}
+            {generatingPDF ? 'Generando...' : 'Descargar PDF'}
           </Button>
         </div>
       </div>
@@ -258,7 +283,13 @@ export default function ReportesPage() {
               <label className="block text-xs font-medium text-slate-500 mb-1">Aduana</label>
               <Select value={aduanaFilter} onValueChange={(val) => setAduanaFilter(val || 'all')}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
+                  <SelectValue placeholder="Todas">
+                    {(value: string | null) => {
+                      if (!value || value === 'all') return 'Todas las aduanas';
+                      const aduana = aduanas.find((a) => a.id === value);
+                      return aduana ? `${aduana.nombre} (${aduana.clave})` : 'Todas las aduanas';
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las aduanas</SelectItem>

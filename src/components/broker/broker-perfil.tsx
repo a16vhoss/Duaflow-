@@ -20,6 +20,8 @@ import {
   MapPin,
   Package,
 } from 'lucide-react';
+import { validatePassword } from '@/lib/password-validation';
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator';
 
 interface MercanciaAssignment {
   mercancias: { nombre: string } | null;
@@ -89,8 +91,9 @@ export default function BrokerPerfil() {
     setPasswordError(null);
     setPasswordSuccess(false);
 
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError('La nueva contrasena debe tener al menos 6 caracteres.');
+    const validation = validatePassword(passwordForm.newPassword);
+    if (!validation.isValid) {
+      setPasswordError('La contrasena no cumple los requisitos: ' + validation.errors[0]);
       return;
     }
 
@@ -287,6 +290,7 @@ export default function BrokerPerfil() {
                     }))
                   }
                   className="bg-slate-900 border-slate-600 text-white pr-10 focus:border-cyan-500 focus:ring-cyan-500/20"
+                  placeholder="Min. 8 caracteres, mayuscula, numero, especial"
                 />
                 <button
                   type="button"
@@ -300,6 +304,7 @@ export default function BrokerPerfil() {
                   )}
                 </button>
               </div>
+              <PasswordStrengthIndicator password={passwordForm.newPassword} variant="dark" />
             </div>
 
             <div className="space-y-2">

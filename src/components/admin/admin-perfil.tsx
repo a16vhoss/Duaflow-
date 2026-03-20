@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { User, Mail, ShieldCheck, Calendar, Save, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { validatePassword } from '@/lib/password-validation';
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator';
 
 export default function AdminPerfil() {
   const supabase = createClient();
@@ -57,8 +59,9 @@ export default function AdminPerfil() {
       setPasswordMsg({ type: 'error', text: 'Las contrasenas no coinciden.' });
       return;
     }
-    if (newPassword.length < 6) {
-      setPasswordMsg({ type: 'error', text: 'La contrasena debe tener al menos 6 caracteres.' });
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      setPasswordMsg({ type: 'error', text: 'La contrasena no cumple los requisitos: ' + validation.errors[0] });
       return;
     }
 
@@ -199,8 +202,9 @@ export default function AdminPerfil() {
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Min. 6 caracteres"
+              placeholder="Min. 8 caracteres, mayuscula, numero, especial"
             />
+            <PasswordStrengthIndicator password={newPassword} variant="light" />
           </div>
           <div>
             <Label>Confirmar contrasena</Label>

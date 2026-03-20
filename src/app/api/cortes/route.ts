@@ -47,6 +47,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Sin permisos para ejecutar corte' }, { status: 403 });
     }
 
+    // Prevent duplicate cortes — reject if one was created in the last 60 seconds
+    const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
+    const { data: recentCortes } = await supabase
+      .from('cortes')
+      .select('id')
+      .gte('created_at', oneMinuteAgo)
+      .eq('tipo', 'manual');
+
+    if (recentCortes && recentCortes.length > 0) {
+      return NextResponse.json(
+        { error: 'Ya se ejecuto un corte hace menos de un minuto. Espera antes de ejecutar otro.' },
+        { status: 409 }
+      );
+    }
+
     // Get all pending containers that are not assigned to any corte
     const { data: pendingContainers, error: fetchError } = await supabase
       .from('containers')

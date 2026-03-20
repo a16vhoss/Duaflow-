@@ -27,6 +27,8 @@ import {
 } from '@/components/ui/dialog';
 import { ShieldCheck, Plus, Pencil, Trash2, UserCheck, UserX } from 'lucide-react';
 import type { AdminPermisos } from '@/types/database';
+import { validatePassword } from '@/lib/password-validation';
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator';
 
 interface AdminRow {
   id: string;
@@ -133,6 +135,16 @@ export default function AdministradoresPage() {
   async function handleSave() {
     if (!nombre.trim() || !email.trim()) return;
     if (!editId && !password.trim()) return;
+
+    // Validar contrasena si se esta creando o si se proporciono una nueva
+    if (password.trim()) {
+      const validation = validatePassword(password);
+      if (!validation.isValid) {
+        setError('Contrasena no valida: ' + validation.errors[0]);
+        return;
+      }
+    }
+
     setSaving(true);
     setError('');
 
@@ -378,8 +390,9 @@ export default function AdministradoresPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={editId ? 'Nueva contrasena...' : 'Min. 6 caracteres'}
+                placeholder={editId ? 'Nueva contrasena...' : 'Min. 8 caracteres, mayuscula, numero, especial'}
               />
+              <PasswordStrengthIndicator password={password} variant="light" />
             </div>
 
             <div>

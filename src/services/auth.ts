@@ -27,8 +27,23 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
+  // Clean up session record before signing out
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await fetch(`/api/auth/session?userId=${user.id}`, { method: 'DELETE' });
+    }
+  } catch {
+    // Non-critical — continue with signout
+  }
+
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+
+  // Clear stored session ID
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('duaflow_session_id');
+  }
 }
 
 export async function resetPassword(email: string) {

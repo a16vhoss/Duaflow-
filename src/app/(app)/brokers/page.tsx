@@ -40,6 +40,8 @@ import {
   UserX,
 } from 'lucide-react';
 import type { Aduana, Mercancia } from '@/types/database';
+import { validatePassword } from '@/lib/password-validation';
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator';
 
 interface BrokerRow {
   id: string;
@@ -110,6 +112,13 @@ export default function BrokersPage() {
 
   async function handleCreateBroker() {
     if (!newNombre.trim() || !newEmail.trim() || !newPassword.trim() || !newAduanaBase) return;
+
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      setCreateError('Contrasena no valida: ' + validation.errors[0]);
+      return;
+    }
+
     setCreating(true);
     setCreateError('');
 
@@ -200,14 +209,21 @@ export default function BrokersPage() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min. 6 caracteres"
+                  placeholder="Min. 8 caracteres, mayuscula, numero, especial"
                 />
+                <PasswordStrengthIndicator password={newPassword} variant="light" />
               </div>
               <div>
                 <Label>Aduana Base</Label>
                 <Select value={newAduanaBase} onValueChange={(val) => setNewAduanaBase(val || '')}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar aduana" />
+                    <SelectValue placeholder="Seleccionar aduana">
+                      {(value: string | null) => {
+                        if (!value) return 'Seleccionar aduana';
+                        const aduana = aduanas.find((a) => a.id === value);
+                        return aduana ? `${aduana.nombre} (${aduana.clave})` : 'Seleccionar aduana';
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {aduanas.map((a) => (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase, createServerSupabase } from '@/lib/supabase/server';
+import { validatePassword } from '@/lib/password-validation';
 
 // POST: Create a new broker or admin user
 export async function POST(req: NextRequest) {
@@ -27,6 +28,15 @@ export async function POST(req: NextRequest) {
 
     if (!nombre || !email || !password) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+
+    // Validar politica de contrasenas
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { error: 'Contrasena no cumple la politica de seguridad: ' + passwordValidation.errors.join(', ') },
+        { status: 400 }
+      );
     }
 
     const userRole = role || 'broker';
@@ -105,6 +115,15 @@ export async function PATCH(req: NextRequest) {
 
     if (!user_id || !password) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
+
+    // Validar politica de contrasenas
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { error: 'Contrasena no cumple la politica de seguridad: ' + passwordValidation.errors.join(', ') },
+        { status: 400 }
+      );
     }
 
     const serviceSupabase = createServiceSupabase();

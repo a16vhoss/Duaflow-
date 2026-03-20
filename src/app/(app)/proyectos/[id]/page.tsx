@@ -72,6 +72,41 @@ export default function ProyectoDetailPage() {
   const [showRechazoDialog, setShowRechazoDialog] = useState(false);
   const [motivo, setMotivo] = useState('');
 
+  // Generates a signed URL for private-bucket documents and opens it
+  async function openDocument(doc: DocType) {
+    // If the url is already an absolute URL (legacy data), try it directly
+    if (doc.url.startsWith('http')) {
+      window.open(doc.url, '_blank');
+      return;
+    }
+    // Generate a signed URL valid for 5 minutes
+    const { data, error } = await supabase.storage
+      .from('documentacion')
+      .createSignedUrl(doc.url, 300);
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    } else {
+      console.error('Error generating signed URL:', error);
+      alert('No se pudo abrir el documento. Intenta de nuevo.');
+    }
+  }
+
+  async function downloadDocument(doc: DocType) {
+    if (doc.url.startsWith('http')) {
+      window.open(doc.url, '_blank');
+      return;
+    }
+    const { data, error } = await supabase.storage
+      .from('documentacion')
+      .createSignedUrl(doc.url, 300, { download: true });
+    if (data?.signedUrl) {
+      window.open(data.signedUrl, '_blank');
+    } else {
+      console.error('Error generating signed URL:', error);
+      alert('No se pudo descargar el documento. Intenta de nuevo.');
+    }
+  }
+
   async function loadData() {
     setLoading(true);
     const [containerRes, docsRes, eventsRes] = await Promise.all([
@@ -241,7 +276,10 @@ export default function ProyectoDetailPage() {
     );
   }
 
-  const canReview = container.estado === 'pendiente' || container.estado === 'correccion_solicitada';
+  // Only allow review actions (approve/reject/request correction) when estado is 'pendiente'.
+  // When 'correccion_solicitada', the broker is working on fixes — admin must wait.
+  const canReview = container.estado === 'pendiente';
+  const isWaitingCorrection = container.estado === 'correccion_solicitada';
 
   return (
     <div className="space-y-6">
@@ -362,21 +400,20 @@ export default function ProyectoDetailPage() {
                           {doc.tipo_mime} {doc.tamano_bytes ? `- ${(doc.tamano_bytes / 1024).toFixed(1)} KB` : ''}
                         </p>
                       </div>
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openDocument(doc)}
                         className="text-rose-500 hover:text-rose-600"
+                        title="Ver documento"
                       >
                         <ExternalLink className="h-4 w-4" />
-                      </a>
-                      <a
-                        href={doc.url}
-                        download
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(doc)}
                         className="text-slate-400 hover:text-slate-600"
+                        title="Descargar documento"
                       >
                         <Download className="h-4 w-4" />
-                      </a>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -476,6 +513,23 @@ export default function ProyectoDetailPage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Correction in progress banner */}
+          {isWaitingCorrection && (
+            <Card className="border-orange-200 bg-orange-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-orange-800">Correccion en progreso</p>
+                    <p className="text-xs text-orange-600 mt-0.5">
+                      Se solicitaron correcciones al broker. Las acciones de revision estan deshabilitadas hasta que el broker reenvie la informacion.
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}

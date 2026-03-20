@@ -129,6 +129,15 @@ CREATE TABLE cortes (
 
 COMMENT ON TABLE cortes IS 'Registro histórico de cada corte ejecutado.';
 
+-- Prevent duplicate cortes at the same date/time (truncated to minute)
+CREATE OR REPLACE FUNCTION immutable_date_trunc_minute(ts TIMESTAMPTZ)
+RETURNS TIMESTAMPTZ AS $$
+    SELECT date_trunc('minute', ts AT TIME ZONE 'UTC');
+$$ LANGUAGE sql IMMUTABLE;
+
+CREATE UNIQUE INDEX idx_cortes_unique_datetime
+  ON cortes (immutable_date_trunc_minute(created_at), tipo);
+
 -- --------------------------------------------------------------------------
 -- 2.9 containers
 -- --------------------------------------------------------------------------
@@ -554,6 +563,114 @@ CREATE POLICY "docs_bucket_delete" ON storage.objects
         bucket_id = 'documentacion'
         AND get_my_role() IN ('admin', 'superadmin')
     );
+
+-- ============================================================================
+-- 9. SECURITY — Login attempts & session control
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- 9.1 login_attempts — Registro de intentos fallidos de login
+-- --------------------------------------------------------------------------
+CREATE TABLE login_attempts (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email       VARCHAR(255) NOT NULL,
+    ip_address  VARCHAR(45),
+    success     BOOLEAN     DEFAULT false,
+    created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE login_attempts IS 'Registro de intentos de login para protección contra fuerza bruta.';
+
+CREATE INDEX idx_login_attempts_email      ON login_attempts (email, created_at DESC);
+CREATE INDEX idx_login_attempts_ip         ON login_attempts (ip_address, created_at DESC);
+
+-- --------------------------------------------------------------------------
+-- 9.2 account_lockouts — Bloqueo temporal de cuentas
+-- --------------------------------------------------------------------------
+CREATE TABLE account_lockouts (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email       VARCHAR(255) UNIQUE NOT NULL,
+    locked_until TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+COMMENT ON TABLE account_lockouts IS 'Bloqueo temporal de cuentas tras intentos fallidos excesivos.';
+
+CREATE INDEX idx_lockouts_email ON account_lockouts (email);
+
+-- --------------------------------------------------------------------------
+-- 9.3 user_sessions — Control de sesiones activas (una por usuario)
+-- --------------------------------------------------------------------------
+CREATE TABLE user_sessions (
+    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID        NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    session_id  TEXT        NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    last_seen   TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(user_id)
+);
+
+COMMENT ON TABLE user_sessions IS 'Sesión activa por usuario para evitar sesiones simultáneas.';
+
+CREATE INDEX idx_user_sessions_user    ON user_sessions (user_id);
+CREATE INDEX idx_user_sessions_session ON user_sessions (session_id);
+
+-- RLS for login_attempts (service role only — no RLS needed, accessed via API)
+ALTER TABLE login_attempts   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_lockouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_sessions    ENABLE ROW LEVEL SECURITY;
+
+-- login_attempts: allow insert from anyone (anon for login), select for admins
+CREATE POLICY "login_attempts_insert_anon" ON login_attempts
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "login_attempts_select_admin" ON login_attempts
+    FOR SELECT USING (get_my_role() IN ('admin', 'superadmin'));
+
+-- account_lockouts: allow all for service role via API
+CREATE POLICY "lockouts_all" ON account_lockouts
+    FOR ALL USING (true);
+
+-- user_sessions: users can see own, admins can see all
+CREATE POLICY "sessions_select" ON user_sessions
+    FOR SELECT USING (
+        user_id = auth.uid()
+        OR get_my_role() IN ('admin', 'superadmin')
+    );
+
+CREATE POLICY "sessions_insert" ON user_sessions
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "sessions_update" ON user_sessions
+    FOR UPDATE USING (true);
+
+CREATE POLICY "sessions_delete" ON user_sessions
+    FOR DELETE USING (
+        user_id = auth.uid()
+        OR get_my_role() IN ('admin', 'superadmin')
+    );
+
+-- --------------------------------------------------------------------------
+-- 9.4 Function: check and clean expired lockouts
+-- --------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION clean_expired_lockouts()
+RETURNS void AS $$
+BEGIN
+    DELETE FROM account_lockouts WHERE locked_until < now();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- --------------------------------------------------------------------------
+-- 9.5 Function: count recent failed attempts (last 15 minutes)
+-- --------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION count_failed_attempts(p_email VARCHAR)
+RETURNS INT AS $$
+    SELECT COALESCE(COUNT(*)::INT, 0)
+    FROM login_attempts
+    WHERE email = p_email
+      AND success = false
+      AND created_at > now() - INTERVAL '15 minutes';
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- ============================================================================
 -- Done.

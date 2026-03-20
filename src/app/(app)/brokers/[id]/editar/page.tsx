@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, Save, User, MapPin, Package } from 'lucide-react';
 import type { Aduana, Mercancia } from '@/types/database';
+import { validatePassword } from '@/lib/password-validation';
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator';
 
 export default function EditBrokerPage() {
   const supabase = createClient();
@@ -105,6 +107,12 @@ export default function EditBrokerPage() {
 
     // Update password if provided (via API route)
     if (password.trim()) {
+      const passwordValidation = validatePassword(password);
+      if (!passwordValidation.isValid) {
+        setError('Contrasena no valida: ' + passwordValidation.errors[0]);
+        setSaving(false);
+        return;
+      }
       const res = await fetch('/api/admin/brokers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -188,8 +196,9 @@ export default function EditBrokerPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Ingrese nueva contrasena..."
+              placeholder="Min. 8 caracteres, mayuscula, numero, especial"
             />
+            <PasswordStrengthIndicator password={password} variant="light" />
           </div>
         </CardContent>
       </Card>
@@ -205,7 +214,13 @@ export default function EditBrokerPage() {
         <CardContent>
           <Select value={aduanaBaseId} onValueChange={(val) => setAduanaBaseId(val || '')}>
             <SelectTrigger className="w-full max-w-sm">
-              <SelectValue placeholder="Seleccionar aduana base" />
+              <SelectValue placeholder="Seleccionar aduana base">
+                {(value: string | null) => {
+                  if (!value) return 'Seleccionar aduana base';
+                  const aduana = aduanas.find((a) => a.id === value);
+                  return aduana ? `${aduana.nombre} (${aduana.clave})` : 'Seleccionar aduana base';
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {aduanas.map((a) => (

@@ -96,6 +96,17 @@ export async function updateContainerStatus(
   adminNombre: string,
   motivo?: string
 ) {
+  // Validate: do not allow approve/reject while container is in correccion_solicitada
+  const { data: current } = await supabase
+    .from('containers')
+    .select('estado')
+    .eq('id', containerId)
+    .single();
+
+  if (current?.estado === 'correccion_solicitada' && (estado === 'aprobado' || estado === 'rechazado')) {
+    throw new Error('No se puede aprobar o rechazar un contenedor mientras esta en proceso de correccion.');
+  }
+
   const updateData: Record<string, unknown> = {
     estado,
     revisado_por: adminId,

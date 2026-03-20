@@ -22,6 +22,7 @@ import {
   Loader2,
   FileText,
   Package,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Mercancia {
@@ -35,6 +36,24 @@ interface Aduana {
   clave: string;
 }
 
+// Tipos de archivo permitidos (Hallazgo 1.1.3)
+const ALLOWED_FILE_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+];
+const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
+const MAX_FILE_SIZE_MB = 10;
+
+function isFileAllowed(file: File): boolean {
+  // Validar por tipo MIME
+  if (ALLOWED_FILE_TYPES.includes(file.type)) return true;
+  // Fallback: validar por extension
+  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+  return ALLOWED_EXTENSIONS.includes(ext);
+}
+
 export default function RegistrarPage() {
   const { user, loading: userLoading } = useUser();
   const router = useRouter();
@@ -45,6 +64,7 @@ export default function RegistrarPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     bl: '',
@@ -93,6 +113,13 @@ export default function RegistrarPage() {
     fetchOptions();
   }, [user]);
 
+  // Build lookup maps for Select labels (Hallazgo 1.1.2)
+  const mercanciaLabels: Record<string, string> = {};
+  mercancias.forEach((m) => { mercanciaLabels[m.id] = m.nombre; });
+
+  const aduanaLabels: Record<string, string> = {};
+  aduanas.forEach((a) => { aduanaLabels[a.id] = `${a.clave} - ${a.nombre}`; });
+
   function handleChange(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError(null);
@@ -101,12 +128,49 @@ export default function RegistrarPage() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setFiles((prev) => [...prev, ...newFiles]);
+      const rejected: string[] = [];
+      const tooLarge: string[] = [];
+      const accepted: File[] = [];
+
+      for (const file of newFiles) {
+        if (!isFileAllowed(file)) {
+          rejected.push(file.name);
+        } else if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+          tooLarge.push(file.name);
+        } else {
+          accepted.push(file);
+        }
+      }
+
+      if (rejected.length > 0 || tooLarge.length > 0) {
+        const messages: string[] = [];
+        if (rejected.length > 0) {
+          messages.push(
+            `Archivos no permitidos: ${rejected.join(', ')}. Solo se aceptan PDF, JPG y PNG.`
+          );
+        }
+        if (tooLarge.length > 0) {
+          messages.push(
+            `Archivos demasiado grandes (max ${MAX_FILE_SIZE_MB}MB): ${tooLarge.join(', ')}`
+          );
+        }
+        setFileError(messages.join(' '));
+      } else {
+        setFileError(null);
+      }
+
+      if (accepted.length > 0) {
+        setFiles((prev) => [...prev, ...accepted]);
+      }
+
+      // Reset input value so user can re-select the same file
+      e.target.value = '';
     }
   }
 
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFileError(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -125,6 +189,14 @@ export default function RegistrarPage() {
     ) {
       setError('Todos los campos son obligatorios.');
       return;
+    }
+
+    // Validate files programmatically before submit (Hallazgo 1.1.3)
+    for (const file of files) {
+      if (!isFileAllowed(file)) {
+        setError(`El archivo "${file.name}" no tiene un formato permitido. Solo se aceptan PDF, JPG y PNG.`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -172,15 +244,12 @@ export default function RegistrarPage() {
             continue;
           }
 
-          // Save document reference
-          const { data: urlData } = supabase.storage
-            .from('documentacion')
-            .getPublicUrl(filePath);
-
+          // Save document reference — store the storage path (not public URL)
+          // because the bucket is private; viewers must use createSignedUrl
           await supabase.from('documents').insert({
             container_id: container.id,
             nombre_archivo: file.name,
-            url: urlData.publicUrl || filePath,
+            url: filePath,
             tipo_mime: file.type,
             tamano_bytes: file.size,
           });
@@ -335,7 +404,11 @@ export default function RegistrarPage() {
                 onValueChange={(v) => handleChange('tipo_mercancia_id', v || '')}
               >
                 <SelectTrigger className="bg-slate-900 border-slate-600 text-white focus:ring-cyan-500/20">
-                  <SelectValue placeholder="Selecciona tipo de mercancía" />
+                  <SelectValue placeholder="Selecciona tipo de mercancía">
+                    {(value: string | null) =>
+                      value ? mercanciaLabels[value] || 'Selecciona tipo de mercancía' : 'Selecciona tipo de mercancía'
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {mercancias.map((m) => (
@@ -358,7 +431,11 @@ export default function RegistrarPage() {
                 onValueChange={(v) => handleChange('aduana_id', v || '')}
               >
                 <SelectTrigger className="bg-slate-900 border-slate-600 text-white focus:ring-cyan-500/20">
-                  <SelectValue placeholder="Selecciona aduana" />
+                  <SelectValue placeholder="Selecciona aduana">
+                    {(value: string | null) =>
+                      value ? aduanaLabels[value] || 'Selecciona aduana' : 'Selecciona aduana'
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   {aduanas.map((a) => (
@@ -376,7 +453,7 @@ export default function RegistrarPage() {
           </CardContent>
         </Card>
 
-        {/* File Upload */}
+        {/* File Upload - Hallazgo 1.1.3: Solo PDF, JPG, PNG */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
@@ -391,16 +468,23 @@ export default function RegistrarPage() {
                 Toca para seleccionar archivos
               </span>
               <span className="text-[10px] text-slate-500 mt-1">
-                PDF, JPG, PNG (múltiples archivos)
+                Solo PDF, JPG, PNG (max {MAX_FILE_SIZE_MB}MB por archivo)
               </span>
               <input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 className="hidden"
                 onChange={handleFileChange}
               />
             </label>
+
+            {fileError && (
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-400">{fileError}</p>
+              </div>
+            )}
 
             {files.length > 0 && (
               <div className="space-y-2">

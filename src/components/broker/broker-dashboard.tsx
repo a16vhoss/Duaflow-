@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/use-user';
 import { useCountdown } from '@/hooks/use-countdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -58,9 +60,74 @@ const STATUS_LABELS: Record<string, string> = {
 
 const CHART_COLORS = ['#EAB308', '#22C55E', '#EF4444'];
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-7 w-32 mb-2" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <div className="text-right space-y-1">
+          <Skeleton className="h-4 w-20 ml-auto" />
+          <Skeleton className="h-4 w-28 ml-auto" />
+        </div>
+      </div>
+
+      {/* Chart skeleton */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader className="pb-2">
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center gap-6">
+            <Skeleton className="w-40 h-40 rounded-full" />
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-4 w-30" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Cards skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[1, 2, 3].map((i) => (
+          <Card key={i} className="bg-slate-800 border-slate-700">
+            <CardContent className="pt-4 pb-4 px-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <div>
+                  <Skeleton className="h-8 w-12 mb-1" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Table skeleton */}
+      <Card className="bg-slate-800 border-slate-700">
+        <CardHeader className="pb-3">
+          <Skeleton className="h-4 w-40" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function BrokerDashboard() {
   const { user, loading: userLoading } = useUser();
   const { timeLeft } = useCountdown();
+  const router = useRouter();
   const supabase = createClient();
 
   const [stats, setStats] = useState<DashboardStats>({
@@ -71,6 +138,7 @@ export default function BrokerDashboard() {
   });
   const [recentContainers, setRecentContainers] = useState<ContainerRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chartReady, setChartReady] = useState(false);
   const [serverTime, setServerTime] = useState('');
 
   useEffect(() => {
@@ -102,6 +170,8 @@ export default function BrokerDashboard() {
       }
 
       setLoading(false);
+      // Allow chart to render smoothly after data is ready
+      requestAnimationFrame(() => setChartReady(true));
     }
 
     fetchDashboard();
@@ -133,11 +203,7 @@ export default function BrokerDashboard() {
   ];
 
   if (userLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -173,33 +239,39 @@ export default function BrokerDashboard() {
         <CardContent>
           <div className="flex items-center justify-center gap-6">
             <div className="w-40 h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={donutData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={65}
-                    paddingAngle={3}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {donutData.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#e2e8f0',
-                      fontSize: '12px',
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              {!chartReady ? (
+                <Skeleton className="w-40 h-40 rounded-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={40}
+                      outerRadius={65}
+                      paddingAngle={3}
+                      dataKey="value"
+                      strokeWidth={0}
+                      isAnimationActive={true}
+                      animationDuration={600}
+                    >
+                      {donutData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        color: '#e2e8f0',
+                        fontSize: '12px',
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
@@ -305,7 +377,7 @@ export default function BrokerDashboard() {
                       key={container.id}
                       className="border-slate-700 hover:bg-slate-700/50 cursor-pointer"
                       onClick={() =>
-                        (window.location.href = `/contenedores/${container.id}`)
+                        router.push(`/contenedores/${container.id}`)
                       }
                     >
                       <TableCell className="text-cyan-400 text-xs font-mono">
