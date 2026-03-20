@@ -369,6 +369,10 @@ CREATE POLICY "containers_update_broker_correccion" ON containers
     FOR UPDATE USING (
         broker_id = auth.uid()
         AND estado = 'correccion_solicitada'
+    )
+    WITH CHECK (
+        broker_id = auth.uid()
+        AND estado IN ('correccion_solicitada', 'pendiente')
     );
 
 -- --------------------------------------------------------------------------
