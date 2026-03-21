@@ -21,13 +21,22 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  AlertCircle,
   Edit3,
   Lock,
   Loader2,
   Save,
+  Upload,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  isFileAllowed,
+  isFileSizeAllowed,
+  MAX_FILE_SIZE_MB,
+  ACCEPTED_INPUT_ATTR,
+} from '@/lib/file-validation';
 
 interface ContainerDetail {
   id: string;
@@ -109,6 +118,11 @@ export default function ContainerDetailPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  // File management for corrections
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [deletedDocIds, setDeletedDocIds] = useState<string[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user || !id) return;
     fetchAll();
@@ -188,10 +202,83 @@ export default function ContainerDetailPage() {
     }
   }
 
+  function handleCorrectionFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    const incoming = Array.from(e.target.files);
+    const rejected: string[] = [];
+    const tooLarge: string[] = [];
+    const accepted: File[] = [];
+
+    for (const file of incoming) {
+      if (!isFileAllowed(file)) {
+        rejected.push(file.name);
+      } else if (!isFileSizeAllowed(file.size)) {
+        tooLarge.push(file.name);
+      } else {
+        accepted.push(file);
+      }
+    }
+
+    if (rejected.length > 0 || tooLarge.length > 0) {
+      const messages: string[] = [];
+      if (rejected.length > 0) {
+        messages.push(
+          `Archivos no permitidos: ${rejected.join(', ')}. Solo se aceptan PDF y Excel (.xlsx, .xls).`
+        );
+      }
+      if (tooLarge.length > 0) {
+        messages.push(
+          `Archivos demasiado grandes (max ${MAX_FILE_SIZE_MB}MB): ${tooLarge.join(', ')}`
+        );
+      }
+      setFileError(messages.join(' '));
+    } else {
+      setFileError(null);
+    }
+
+    if (accepted.length > 0) {
+      setNewFiles((prev) => [...prev, ...accepted]);
+    }
+
+    e.target.value = '';
+  }
+
+  function removeCorrectionFile(index: number) {
+    setNewFiles((prev) => prev.filter((_, i) => i !== index));
+    setFileError(null);
+  }
+
+  function markDocumentForDeletion(docId: string) {
+    setDeletedDocIds((prev) => [...prev, docId]);
+  }
+
+  function resetFileState() {
+    setNewFiles([]);
+    setDeletedDocIds([]);
+    setFileError(null);
+  }
+
   async function handleSaveCorrection() {
     if (!container || !user) return;
     setSaving(true);
 
+    // 1. Backend validation for new files
+    if (newFiles.length > 0) {
+      const valRes = await fetch('/api/documents/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: newFiles.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+        }),
+      });
+      if (!valRes.ok) {
+        setFileError('Archivos no validos. Solo se aceptan PDF y Excel.');
+        setSaving(false);
+        return;
+      }
+    }
+
+    // 2. Update text fields
     const { error } = await supabase
       .from('containers')
       .update({
@@ -204,18 +291,51 @@ export default function ContainerDetailPage() {
       })
       .eq('id', container.id);
 
-    if (!error) {
-      await supabase.from('container_events').insert({
-        container_id: container.id,
-        tipo_evento: 'CORRECTION_SUBMITTED',
-        descripcion: 'Corrección enviada por broker',
-        ejecutado_por: user.id,
-        rol_ejecutor: 'BROKER',
-      });
-      setEditing(false);
-      fetchAll();
+    if (error) {
+      setSaving(false);
+      return;
     }
 
+    // 3. Delete marked documents
+    for (const docId of deletedDocIds) {
+      const doc = documents.find((d) => d.id === docId);
+      if (doc) {
+        await supabase.storage.from('documentacion').remove([doc.url]);
+        await supabase.from('documents').delete().eq('id', docId);
+      }
+    }
+
+    // 4. Upload new files
+    for (const file of newFiles) {
+      const filePath = `${container.id}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('documentacion')
+        .upload(filePath, file);
+
+      if (!uploadError) {
+        await supabase.from('documents').insert({
+          container_id: container.id,
+          nombre_archivo: file.name,
+          url: filePath,
+          tipo_mime: file.type,
+          tamano_bytes: file.size,
+        });
+      }
+    }
+
+    // 5. Log event
+    await supabase.from('container_events').insert({
+      container_id: container.id,
+      tipo_evento: 'CORRECTION_SUBMITTED',
+      descripcion: 'Corrección enviada por broker',
+      ejecutado_por: user.id,
+      rol_ejecutor: 'BROKER',
+    });
+
+    // 6. Reset and refresh
+    setEditing(false);
+    resetFileState();
+    fetchAll();
     setSaving(false);
   }
 
@@ -390,11 +510,109 @@ export default function ContainerDetailPage() {
                 />
               </div>
             </div>
+            {/* Document management during correction */}
+            <div className="space-y-2 pt-2">
+              <Label className="text-slate-300 text-xs">Documentos Actuales</Label>
+              {documents.filter((d) => !deletedDocIds.includes(d.id)).length === 0 && deletedDocIds.length > 0 ? (
+                <p className="text-xs text-slate-500 text-center py-2">
+                  Todos los documentos seran eliminados al guardar.
+                </p>
+              ) : null}
+              {documents
+                .filter((d) => !deletedDocIds.includes(d.id))
+                .map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+                      <span className="text-xs text-slate-200 truncate">
+                        {doc.nombre_archivo}
+                      </span>
+                      <span className="text-[10px] text-slate-500 flex-shrink-0">
+                        {(doc.tamano_bytes / 1024).toFixed(0)} KB
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => markDocumentForDeletion(doc.id)}
+                      className="text-slate-500 hover:text-red-400 ml-2"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              {deletedDocIds.length > 0 && (
+                <p className="text-xs text-red-400">
+                  {deletedDocIds.length} documento(s) seran eliminados al guardar.{' '}
+                  <button
+                    type="button"
+                    onClick={() => setDeletedDocIds([])}
+                    className="underline text-slate-400 hover:text-slate-300"
+                  >
+                    Deshacer
+                  </button>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <Label className="text-slate-300 text-xs">Agregar Documentos</Label>
+              <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-slate-600 rounded-lg cursor-pointer hover:border-cyan-500/50 transition-colors">
+                <Upload className="h-5 w-5 text-slate-500 mb-1" />
+                <span className="text-[10px] text-slate-500">
+                  Solo PDF y Excel (max {MAX_FILE_SIZE_MB}MB)
+                </span>
+                <input
+                  type="file"
+                  multiple
+                  accept={ACCEPTED_INPUT_ATTR}
+                  className="hidden"
+                  onChange={handleCorrectionFileChange}
+                />
+              </label>
+
+              {fileError && (
+                <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                  <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-400">{fileError}</p>
+                </div>
+              )}
+
+              {newFiles.map((file, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-cyan-400 flex-shrink-0" />
+                    <span className="text-xs text-slate-300 truncate">
+                      {file.name}
+                    </span>
+                    <span className="text-[10px] text-slate-500 flex-shrink-0">
+                      {(file.size / 1024).toFixed(0)} KB
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCorrectionFile(i)}
+                    className="text-slate-500 hover:text-red-400 ml-2"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
             <div className="flex gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  setEditing(false);
+                  resetFileState();
+                }}
                 className="border-slate-600 text-slate-300 hover:bg-slate-700"
               >
                 Cancelar

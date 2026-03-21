@@ -405,6 +405,17 @@ CREATE POLICY "documents_delete" ON documents
         )
     );
 
+-- Brokers can delete their own container documents during correction flow
+CREATE POLICY "documents_delete_broker_correccion" ON documents
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM containers c
+            WHERE c.id = documents.container_id
+              AND c.broker_id = auth.uid()
+              AND c.estado = 'correccion_solicitada'
+        )
+    );
+
 -- --------------------------------------------------------------------------
 -- 6.6 container_events (access follows container access)
 -- --------------------------------------------------------------------------
@@ -566,6 +577,19 @@ CREATE POLICY "docs_bucket_delete" ON storage.objects
     FOR DELETE USING (
         bucket_id = 'documentacion'
         AND get_my_role() IN ('admin', 'superadmin')
+    );
+
+-- Brokers can delete their own container files from storage during correction
+CREATE POLICY "docs_bucket_delete_broker_correccion" ON storage.objects
+    FOR DELETE USING (
+        bucket_id = 'documentacion'
+        AND auth.uid() IS NOT NULL
+        AND EXISTS (
+            SELECT 1 FROM containers c
+            WHERE c.id::text = (string_to_array(name, '/'))[1]
+              AND c.broker_id = auth.uid()
+              AND c.estado = 'correccion_solicitada'
+        )
     );
 
 -- ============================================================================

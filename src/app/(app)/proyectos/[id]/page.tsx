@@ -166,7 +166,7 @@ export default function ProyectoDetailPage() {
         tipo: 'aprobacion',
         titulo: 'Contenedor Aprobado',
         mensaje: `El contenedor ${container.folio} ha sido aprobado y finalizado.`,
-        enviada: false,
+        enviada: true,
         leida: false,
       });
     }
@@ -205,7 +205,7 @@ export default function ProyectoDetailPage() {
         tipo: 'correccion',
         titulo: 'Correcciones Solicitadas',
         mensaje: `Se han solicitado correcciones para el contenedor ${container.folio}: ${motivo}`,
-        enviada: false,
+        enviada: true,
         leida: false,
       });
     }
@@ -246,7 +246,7 @@ export default function ProyectoDetailPage() {
         tipo: 'rechazo',
         titulo: 'Contenedor Rechazado',
         mensaje: `El contenedor ${container.folio} ha sido rechazado. Motivo: ${motivo}`,
-        enviada: false,
+        enviada: true,
         leida: false,
       });
     }

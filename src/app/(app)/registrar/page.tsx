@@ -36,23 +36,12 @@ interface Aduana {
   clave: string;
 }
 
-// Tipos de archivo permitidos (Hallazgo 1.1.3)
-const ALLOWED_FILE_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-];
-const ALLOWED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png'];
-const MAX_FILE_SIZE_MB = 10;
-
-function isFileAllowed(file: File): boolean {
-  // Validar por tipo MIME
-  if (ALLOWED_FILE_TYPES.includes(file.type)) return true;
-  // Fallback: validar por extension
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-  return ALLOWED_EXTENSIONS.includes(ext);
-}
+import {
+  isFileAllowed,
+  isFileSizeAllowed,
+  MAX_FILE_SIZE_MB,
+  ACCEPTED_INPUT_ATTR,
+} from '@/lib/file-validation';
 
 export default function RegistrarPage() {
   const { user, loading: userLoading } = useUser();
@@ -135,7 +124,7 @@ export default function RegistrarPage() {
       for (const file of newFiles) {
         if (!isFileAllowed(file)) {
           rejected.push(file.name);
-        } else if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        } else if (!isFileSizeAllowed(file.size)) {
           tooLarge.push(file.name);
         } else {
           accepted.push(file);
@@ -146,7 +135,7 @@ export default function RegistrarPage() {
         const messages: string[] = [];
         if (rejected.length > 0) {
           messages.push(
-            `Archivos no permitidos: ${rejected.join(', ')}. Solo se aceptan PDF, JPG y PNG.`
+            `Archivos no permitidos: ${rejected.join(', ')}. Solo se aceptan PDF y Excel (.xlsx, .xls).`
           );
         }
         if (tooLarge.length > 0) {
@@ -194,7 +183,7 @@ export default function RegistrarPage() {
     // Validate files programmatically before submit (Hallazgo 1.1.3)
     for (const file of files) {
       if (!isFileAllowed(file)) {
-        setError(`El archivo "${file.name}" no tiene un formato permitido. Solo se aceptan PDF, JPG y PNG.`);
+        setError(`El archivo "${file.name}" no tiene un formato permitido. Solo se aceptan PDF y Excel (.xlsx, .xls).`);
         return;
       }
     }
@@ -203,6 +192,21 @@ export default function RegistrarPage() {
     setError(null);
 
     try {
+      // Validacion backend de archivos (Hallazgo 1.3)
+      if (files.length > 0) {
+        const valRes = await fetch('/api/documents/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+          }),
+        });
+        if (!valRes.ok) {
+          const valData = await valRes.json();
+          throw new Error(valData.errors?.join('; ') || 'Archivos no validos.');
+        }
+      }
+
       // Create the container record
       // Generate folio
       const year = new Date().getFullYear();
@@ -468,12 +472,12 @@ export default function RegistrarPage() {
                 Toca para seleccionar archivos
               </span>
               <span className="text-[10px] text-slate-500 mt-1">
-                Solo PDF, JPG, PNG (max {MAX_FILE_SIZE_MB}MB por archivo)
+                Solo PDF y Excel (max {MAX_FILE_SIZE_MB}MB por archivo)
               </span>
               <input
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                accept={ACCEPTED_INPUT_ATTR}
                 className="hidden"
                 onChange={handleFileChange}
               />
